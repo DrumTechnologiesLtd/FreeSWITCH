@@ -1966,7 +1966,7 @@ static void xmpp_connect(ldl_handle_t *handle, char *jabber_id, char *pass)
 				ldl_flush_queue(handle, 0);
 			}
 
-			handle->counter--;
+//			handle->counter--;
 			if (!ldl_test_flag(handle, LDL_FLAG_CONNECTED)) {
 				if (IKS_NET_TLSFAIL == e) {
 					globals.logger(DL_LOG_CRIT, "tls handshake failed\n");
