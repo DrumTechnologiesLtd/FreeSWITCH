@@ -1,21 +1,31 @@
 <include>
   <!-- Component (Server to Server Login) -->
   <!-- to use this profile take the x- away from the open and close tags so its <profile> and </profile> -->
-  <x-profile type="component">
+  <profile type="component">
     <param name="name" value="$${xmpp_server_profile}"/>
     <param name="password" value="secret"/>
     <param name="dialplan" value="XML"/>
     <param name="context" value="public"/>
     <param name="rtp-ip" value="$${bind_server_ip}"/>
-    <param name="server" value="jabber.server.org:5347"/>
+    <param name="ext-rtp-ip" value="$${external_rtp_ip}"/>
+    <param name="server" value="localhost:5275"/>
+    <param name="auto-login" value="true"/>
+    <!-- SASL "plain" or "md5" -->
+    <param name="sasl" value="md5"/>
+    <!-- Enable TLS or not -->
+    <param name="tls" value="true"/>
     <!-- disable to trade async for more calls -->
     <param name="use-rtp-timer" value="true"/>
+    <param name="rtp-timer-name" value="none"/>
     <!-- "_auto_" means the extension will be automaticly set to the called jid -->
-    <param name="exten" value="_auto_"/>
-    <!--<param name="vad" value="both"/>-->
+    <!--param name="exten" value="_auto_"/-->
+    <param name="exten" value="1000"/>
+    <param name="vad" value="both"/>
     <!--<param name="avatar" value="/path/to/tiny.jpg"/>-->
     <!--If you have ODBC support and a working dsn you can use it instead of SQLite-->
     <!--<param name="odbc-dsn" value="dsn:user:pass"/>-->
-    <!--<param name="candidate-acl" value="wan.auto"/>-->
-  </x-profile>
+    <param name="candidate-acl" value="wan.auto"/>
+    <param name="local-network-acl" value="localnet.auto"/>
+    <param name="use-jingle" value="true"/>
+  </profile>
 </include>
