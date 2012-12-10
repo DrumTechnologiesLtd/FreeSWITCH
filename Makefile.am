@@ -470,9 +470,15 @@ libs/speex/libspeex/libspeexdsp.la: libs/speex/.update
 	@cd libs/speex && $(MAKE)
 	@$(TOUCH_TARGET)
 
-libs/sqlite/libsqlite3.la: libs/sqlite libs/sqlite/.update
+libs/sqlite/libsqlite3.la: libs/sqlite libs/sqlite/Makefile libs/sqlite/.update
 	touch src/include/switch.h
 	@cd libs/sqlite && $(MAKE) CFLAGS="$(SWITCH_AM_CFLAGS)"
+	@$(TOUCH_TARGET)
+
+libs/sqlite/Makefile: libs/sqlite/configure.ac
+	cd libs/sqlite && autoconf
+	cd libs/sqlite && ./config.status --recheck
+	cd libs/sqlite && ./config.status
 	@$(TOUCH_TARGET)
 
 libs/pcre/libpcre.la: libs/pcre libs/pcre/.update
@@ -606,6 +612,10 @@ version:
 
 reinstall: modwipe uninstall install
 
+pristine:
+	git clean -fdx
+	git reset --hard
+
 update-clean: clean libs/openzap/Makefile python-reconf
 	cd libs/sofia-sip && $(MAKE) clean
 	cd libs/openzap && $(MAKE) clean
@@ -617,13 +627,6 @@ update-clean: clean libs/openzap/Makefile python-reconf
 swigall:
 	@echo reswigging all
 	sh $(switch_srcdir)/build/swigall.sh
-
-sure: current
-
-speedy-sure: update-clean
-	$(MAKE) -j core
-	cd libs/sofia-sip && $(MAKE) -j
-	$(MAKE) -j modules
 
 speex-reconf:
 	cd libs/speex && autoreconf
@@ -680,6 +683,14 @@ cluecon:
 	@echo
 	@echo http://www.cluecon.com
 	@sleep 5
+
+sure: is-scm pristine update
+	git pull
+	sh bootstrap.sh
+	sh configure $(CONFIGURE_ARGS)
+	make $(MAKE_ARGS)
+	make reinstall
+
 current: cluecon update-clean is-scm
 	$(MAKE) update
 	$(MAKE) all

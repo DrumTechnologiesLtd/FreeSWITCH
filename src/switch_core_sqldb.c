@@ -152,7 +152,7 @@ static switch_cache_db_handle_t *get_handle(const char *db_str, const char *user
 			
 	if (!r) {
 		for (dbh_ptr = sql_manager.handle_pool; dbh_ptr; dbh_ptr = dbh_ptr->next) {
-			if (dbh_ptr->hash == hash && !dbh_ptr->use_count && !switch_test_flag(dbh_ptr, CDF_PRUNE) && 
+			if (dbh_ptr->hash == hash && (dbh_ptr->type != SCDB_TYPE_PGSQL || !dbh_ptr->use_count) && !switch_test_flag(dbh_ptr, CDF_PRUNE) && 
 				switch_mutex_trylock(dbh_ptr->mutex) == SWITCH_STATUS_SUCCESS) {
 				r = dbh_ptr;
 				break;
@@ -703,6 +703,29 @@ SWITCH_DECLARE(int) switch_cache_db_affected_rows(switch_cache_db_handle_t *dbh)
 	return 0;
 }
 
+SWITCH_DECLARE(int) switch_cache_db_load_extension(switch_cache_db_handle_t *dbh, const char *extension)
+{
+	switch (dbh->type) {
+	case SCDB_TYPE_CORE_DB:
+		{
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "try to load extension [%s]!\n", extension);
+			return switch_core_db_load_extension(dbh->native_handle.core_db_dbh, extension);
+		}
+		break;
+	case SCDB_TYPE_ODBC:
+		{
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "load extension not supported by type ODBC!\n");
+		}
+		break;
+	case SCDB_TYPE_PGSQL:
+		{
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "load extension not supported by type PGSQL!\n");
+		}
+		break;
+	}
+	return 0;
+}
+
 
 SWITCH_DECLARE(char *) switch_cache_db_execute_sql2str(switch_cache_db_handle_t *dbh, char *sql, char *str, size_t len, char **err)
 {
@@ -1238,6 +1261,7 @@ struct switch_sql_queue_manager {
 	char *inner_post_trans_execute;
 	switch_memory_pool_t *pool;
 	uint32_t max_trans;
+	uint32_t confirm;
 };
 
 static int qm_wake(switch_sql_queue_manager_t *qm)
@@ -1408,10 +1432,11 @@ SWITCH_DECLARE(switch_status_t) switch_sql_queue_manager_push_confirm(switch_sql
 	}
 
 	switch_mutex_lock(qm->mutex);
+	qm->confirm++;
 	switch_queue_push(qm->sql_queue[pos], dup ? strdup(sql) : (char *)sql);
-	written = qm->written[pos];
+	written = qm->pre_written[pos];
 	size = switch_sql_queue_manager_size(qm, pos);
-	want = written + qm->pre_written[pos] + size;
+	want = written + size;
 	switch_mutex_unlock(qm->mutex);
 
 	qm_wake(qm);
@@ -1427,6 +1452,10 @@ SWITCH_DECLARE(switch_status_t) switch_sql_queue_manager_push_confirm(switch_sql
 			}
 		}
 	}
+
+	switch_mutex_lock(qm->mutex);
+	qm->confirm--;
+	switch_mutex_unlock(qm->mutex);
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -1493,12 +1522,6 @@ static uint32_t do_trans(switch_sql_queue_manager_t *qm)
 	uint32_t i;
 
 	if (io_mutex) switch_mutex_lock(io_mutex);
-
-	switch_mutex_lock(qm->mutex);
-	for (i = 0; i < qm->numq; i++) {
-		qm->pre_written[i] = 0;
-	}
-	switch_mutex_unlock(qm->mutex);
 
 	if (!zstr(qm->pre_trans_execute)) {
 		switch_cache_db_execute_sql_real(qm->event_db, qm->pre_trans_execute, &errmsg);
@@ -1623,7 +1646,7 @@ static uint32_t do_trans(switch_sql_queue_manager_t *qm)
 
 	switch_mutex_lock(qm->mutex);
 	for (i = 0; i < qm->numq; i++) {
-		qm->written[i] += qm->pre_written[i];
+		qm->written[i] = qm->pre_written[i];
 	}
 	switch_mutex_unlock(qm->mutex);
 
@@ -1712,12 +1735,17 @@ static void *SWITCH_THREAD_FUNC switch_user_sql_thread(switch_thread_t *thread, 
 
 	check:
 
-		if ((lc = qm_ttl(qm)) < qm->max_trans / 4) {
-			switch_yield(500000);
-			if ((lc = qm_ttl(qm)) == 0) {
-				switch_thread_cond_wait(qm->cond, qm->cond_mutex);
-			}
+		if ((lc = qm_ttl(qm)) == 0) {
+			switch_thread_cond_wait(qm->cond, qm->cond_mutex);
 		}
+
+		i = 40;
+
+		while (--i > 0 && (lc = qm_ttl(qm)) < qm->max_trans / 4 && !qm->confirm) {
+			switch_yield(5000);
+		}
+
+
 	}
 
 	switch_mutex_unlock(qm->cond_mutex);
