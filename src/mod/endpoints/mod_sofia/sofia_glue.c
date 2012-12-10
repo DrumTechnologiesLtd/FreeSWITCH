@@ -707,9 +707,9 @@ void sofia_glue_set_local_sdp(private_object_t *tech_pvt, const char *ip, switch
 
 					if (ov_fmtp) {
 						pass_fmtp = ov_fmtp;
-					} else {
-						pass_fmtp = switch_channel_get_variable(tech_pvt->channel, "sip_video_fmtp");
-					}
+					}// else { // seems to break eyebeam at least...
+						//pass_fmtp = switch_channel_get_variable(tech_pvt->channel, "sip_video_fmtp");
+					//}
 				}
 
 				if (pass_fmtp) {
@@ -2318,7 +2318,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->tls_sip_port);
 				} else {
 					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sip:%s@%s%s%s:%d", contact,
-																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->sip_port);
+																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->extsipport);
 				}
 			} else {
 				if (sofia_glue_transport_has_tls(tech_pvt->transport)) {
@@ -3258,10 +3258,11 @@ switch_status_t sofia_glue_activate_rtp(private_object_t *tech_pvt, switch_rtp_f
 		if (switch_rtp_ready(tech_pvt->rtp_session)) {
 			if (sofia_test_flag(tech_pvt, TFLAG_VIDEO) && !switch_rtp_ready(tech_pvt->video_rtp_session)) {
 				goto video;
-			} else {
-				goto end;
 			}
-		}
+
+			status = SWITCH_STATUS_SUCCESS;
+			goto end;
+		} 
 	}
 
 	if ((status = sofia_glue_tech_set_codec(tech_pvt, 0)) != SWITCH_STATUS_SUCCESS) {
@@ -6787,27 +6788,27 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 }
 
 
-void sofia_glue_tech_simplify(private_object_t *tech_pvt)
+int sofia_glue_tech_simplify(private_object_t *tech_pvt)
 {
 	const char *uuid, *network_addr_a = NULL, *network_addr_b = NULL, *simplify, *simplify_other_channel;
 	switch_channel_t *other_channel = NULL, *inbound_channel = NULL;
 	switch_core_session_t *other_session = NULL, *inbound_session = NULL;
 	uint8_t did_simplify = 0;
+	int r = 0;
 
 	if (!switch_channel_test_flag(tech_pvt->channel, CF_ANSWERED) || switch_channel_test_flag(tech_pvt->channel, CF_SIMPLIFY)) {
-		return;
+		goto end;
 	}
 
-
-
-	if ((uuid = switch_channel_get_partner_uuid(tech_pvt->channel))
-		&& (other_session = switch_core_session_locate(uuid))) {
+	if ((uuid = switch_channel_get_partner_uuid(tech_pvt->channel)) && (other_session = switch_core_session_locate(uuid))) {
 
 		other_channel = switch_core_session_get_channel(other_session);
 
 		if (switch_channel_test_flag(other_channel, CF_ANSWERED)) {	/* Check if the other channel is answered */
 			simplify = switch_channel_get_variable(tech_pvt->channel, "sip_auto_simplify");
 			simplify_other_channel = switch_channel_get_variable(other_channel, "sip_auto_simplify");
+
+			r = 1;
 
 			if (switch_true(simplify) && !switch_channel_test_flag(tech_pvt->channel, CF_BRIDGE_ORIGINATOR)) {
 				network_addr_a = switch_channel_get_variable(tech_pvt->channel, "network_addr");
@@ -6853,6 +6854,11 @@ void sofia_glue_tech_simplify(private_object_t *tech_pvt)
 
 		switch_core_session_rwunlock(other_session);
 	}
+
+
+ end:
+
+	return r;
 }
 
 void sofia_glue_pause_jitterbuffer(switch_core_session_t *session, switch_bool_t on)

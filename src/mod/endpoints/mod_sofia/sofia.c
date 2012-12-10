@@ -1354,7 +1354,7 @@ static void our_sofia_event_callback(nua_event_t event,
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Request-Target-Extension", ref_to_user);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Request-Target-Domain", ref_to_host);
 				if (switch_true(full_url)) {
-					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "full-url", "true");
+					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "full_url", "true");
 				}
 
 				if (sip->sip_call_id && sip->sip_call_id->i_id) {
@@ -1582,7 +1582,6 @@ void sofia_process_dispatch_event(sofia_dispatch_event_t **dep)
 	nua_t *nua = de->nua;
 	sofia_profile_t *profile = de->profile;
 	sofia_private_t *sofia_private = nua_handle_magic(de->nh);
-	switch_core_session_t *session = de->session;
 	*dep = NULL;
 
 	our_sofia_event_callback(de->data->e_event, de->data->e_status, de->data->e_phrase, de->nua, de->profile, 
@@ -1597,10 +1596,6 @@ void sofia_process_dispatch_event(sofia_dispatch_event_t **dep)
 
 	nua_handle_unref(nh);
 	nua_stack_unref(nua);
-
-	if (session) {
-		switch_ivr_parse_all_signal_data(session);
-	}
 }
 
 
@@ -1686,7 +1681,7 @@ void sofia_msg_thread_start(int idx)
 }
 
 //static int foo = 0;
-static void sofia_queue_message(sofia_dispatch_event_t *de)
+void sofia_queue_message(sofia_dispatch_event_t *de)
 {
 	int launch = 0;
 
@@ -2428,7 +2423,7 @@ void *SWITCH_THREAD_FUNC sofia_profile_thread_run(switch_thread_t *thread, void 
 	if (!profile->nua) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error Creating SIP UA for profile: %s\n"
 						  "The likely causes for this are:\n" "1) Another application is already listening on the specified address.\n"
-						  "2) The IP the profile is attempting to bind to is not local to this system.", profile->name);
+						  "2) The IP the profile is attempting to bind to is not local to this system.\n", profile->name);
 		sofia_profile_start_failure(profile, profile->name);
 		sofia_glue_del_profile(profile);
 		goto end;
@@ -3217,14 +3212,14 @@ static void parse_gateways(sofia_profile_t *profile, switch_xml_t gateways_tag)
 					gateway->register_contact = switch_core_sprintf(gateway->pool, format, extension,
 							sipip,
 							sofia_glue_transport_has_tls(gateway->register_transport) ?
-							profile->tls_sip_port : profile->sip_port, params, str_rfc_5626);
+							profile->tls_sip_port : profile->extsipport, params, str_rfc_5626);
 
 				} else {
 					format = strchr(sipip, ':') ? "<sip:%s@[%s]:%d%s>" : "<sip:%s@%s:%d%s>";
 					gateway->register_contact = switch_core_sprintf(gateway->pool, format, extension,
 							sipip,
 							sofia_glue_transport_has_tls(gateway->register_transport) ?
-							profile->tls_sip_port : profile->sip_port, params);
+							profile->tls_sip_port : profile->extsipport, params);
 				}
 			} else {
 				if (rfc_5626) {
@@ -3232,14 +3227,14 @@ static void parse_gateways(sofia_profile_t *profile, switch_xml_t gateways_tag)
 					gateway->register_contact = switch_core_sprintf(gateway->pool, format, gateway->name,
 							sipip,
 							sofia_glue_transport_has_tls(gateway->register_transport) ?
-							profile->tls_sip_port : profile->sip_port, params, str_rfc_5626);
+							profile->tls_sip_port : profile->extsipport, params, str_rfc_5626);
 
 				} else {
 					format = strchr(sipip, ':') ? "<sip:gw+%s@[%s]:%d%s>" : "<sip:gw+%s@%s:%d%s>";
 					gateway->register_contact = switch_core_sprintf(gateway->pool, format, gateway->name,
 							sipip,
 							sofia_glue_transport_has_tls(gateway->register_transport) ?
-							profile->tls_sip_port : profile->sip_port, params);
+							profile->tls_sip_port : profile->extsipport, params);
 
 				}
 			}
@@ -3306,14 +3301,14 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 		profile->public_url = switch_core_sprintf(profile->pool,
 												  "sip:%s@%s%s%s:%d",
 												  profile->contact_user,
-												  ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->sip_port);
+												  ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->extsipport);
 	}
 
 	if (profile->extsipip && !sofia_test_pflag(profile, PFLAG_AUTO_NAT)) {
 		char *ipv6 = strchr(profile->extsipip, ':');
 		profile->url = switch_core_sprintf(profile->pool,
 										   "sip:%s@%s%s%s:%d",
-										   profile->contact_user, ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->sip_port);
+										   profile->contact_user, ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->extsipport);
 		profile->bindurl = switch_core_sprintf(profile->pool, "%s;maddr=%s", profile->url, profile->sipip);
 	} else {
 		char *ipv6 = strchr(profile->sipip, ':');
@@ -4781,10 +4776,11 @@ static void sofia_handle_sip_r_options(switch_core_session_t *session, int statu
 		gateway->ping = switch_epoch_time_now(NULL) + gateway->ping_freq;
 		sofia_reg_release_gateway(gateway);
 		gateway->pinging = 0;
-	} else if (sofia_test_pflag(profile, PFLAG_UNREG_OPTIONS_FAIL) && (status != 200 && status != 486) && sip && sip->sip_to) {
+	} else if (sofia_test_pflag(profile, PFLAG_UNREG_OPTIONS_FAIL) && (status != 200 && status != 486) &&
+			   sip && sip->sip_to && sip->sip_call_id && sip->sip_call_id->i_id && strchr(sip->sip_call_id->i_id, '_')) {
 		char *sql;
 		time_t now = switch_epoch_time_now(NULL);
-		const char *call_id = sip->sip_call_id->i_id;
+		const char *call_id = strchr(sip->sip_call_id->i_id, '_') + 1;
 
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "Expire registration '%s@%s' due to options failure\n",
 						  sip->sip_to->a_url->url_user, sip->sip_to->a_url->url_host);
@@ -8003,7 +7999,7 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 			if (sip->sip_contact->m_url->url_port) {
 				port = atoi(sip->sip_contact->m_url->url_port);
 			} else {
-				port = sofia_glue_transport_has_tls(transport) ? profile->tls_sip_port : profile->sip_port;
+				port = sofia_glue_transport_has_tls(transport) ? profile->tls_sip_port : profile->extsipport;
 			}
 
 			ipv6 = strchr(host, ':');
