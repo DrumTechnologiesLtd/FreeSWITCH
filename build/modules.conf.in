@@ -61,7 +61,7 @@ codecs/mod_h26x
 codecs/mod_vp8
 #codecs/mod_ilbc
 #codecs/mod_isac
-#codecs/mod_opus
+codecs/mod_opus
 #codecs/mod_sangoma_codec
 #codecs/mod_silk
 #codecs/mod_siren
@@ -71,7 +71,7 @@ dialplans/mod_dialplan_asterisk
 dialplans/mod_dialplan_xml
 #directories/mod_ldap
 #endpoints/mod_alsa
-#endpoints/mod_dingaling
+endpoints/mod_dingaling
 #endpoints/mod_h323
 #endpoints/mod_html5
 #endpoints/mod_khomp
