@@ -195,7 +195,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_opus_load)
 
 	for (x = 0; x < 3; x++) {
 		switch_core_codec_add_implementation(pool, codec_interface, SWITCH_CODEC_TYPE_AUDIO,	/* enumeration defining the type of the codec */
-											 116,	/* the IANA code number */
+											 111,	/* the IANA code number */
 											 "opus",/* the IANA code name */
 											 NULL,	/* default fmtp to send (can be overridden by the init function) */
 											 rate,	/* samples transferred per second */
