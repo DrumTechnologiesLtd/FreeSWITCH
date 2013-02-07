@@ -358,7 +358,7 @@ SWITCH_DECLARE(uint8_t) switch_stun_packet_attribute_get_xor_mapped_address(swit
 	char *p = ipstr;
 
 	ip = (switch_stun_ip_t *) attribute->value;
-    ip->address ^= cookie;
+	ip->address ^= cookie;
 
 	i = (uint8_t *) & ip->address;
 	*ipstr = 0;
