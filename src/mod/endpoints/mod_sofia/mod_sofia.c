@@ -2027,28 +2027,16 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 							  switch_channel_get_name(channel), msg->string_arg);
 			sofia_glue_tech_set_local_sdp(tech_pvt, msg->string_arg, SWITCH_TRUE);
 
-			if (msg->numeric_arg) { // ACK
-				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "3PCC-PROXY nomedia - sending ack\n");
-				nua_ack(tech_pvt->nh,
-						TAG_IF(!zstr(tech_pvt->user_via), SIPTAG_VIA_STR(tech_pvt->user_via)),
-						SIPTAG_CONTACT_STR(tech_pvt->reply_contact),
-						SIPTAG_PAYLOAD_STR(msg->string_arg),
-						SIPTAG_CONTENT_TYPE_STR("application/sdp"),
-						TAG_END());
-				sofia_clear_flag(tech_pvt, TFLAG_3PCC_INVITE);
-				
-			} else {
-				if(zstr(tech_pvt->local_sdp_str)) {
-					sofia_set_flag(tech_pvt, TFLAG_3PCC_INVITE);
-				}
-				
-				sofia_set_flag_locked(tech_pvt, TFLAG_SENT_UPDATE);
-				
-				if (!switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
-					switch_channel_set_flag(channel, CF_REQ_MEDIA);
-				}
-				sofia_glue_do_invite(session);
+			if(zstr(tech_pvt->local_sdp_str)) {
+				sofia_set_flag(tech_pvt, TFLAG_3PCC_INVITE);
 			}
+
+			sofia_set_flag_locked(tech_pvt, TFLAG_SENT_UPDATE);
+
+			if (!switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
+				switch_channel_set_flag(channel, CF_REQ_MEDIA);
+			}
+			sofia_glue_do_invite(session);
 		}
 		break;
 
@@ -2075,7 +2063,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 
 			start_udptl(tech_pvt, t38_options);
 
-			sofia_glue_set_image_sdp(tech_pvt, t38_options, msg->numeric_arg);
+			sofia_glue_set_udptl_image_sdp(tech_pvt, t38_options, msg->numeric_arg);
 
 			if (!sofia_test_flag(tech_pvt, TFLAG_BYE)) {
 				char *extra_headers = sofia_glue_get_extra_headers(channel, SOFIA_SIP_RESPONSE_HEADER_PREFIX);
@@ -2107,7 +2095,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 			switch_t38_options_t *t38_options = switch_channel_get_private(tech_pvt->channel, "t38_options");
 
 			if (t38_options) {
-				sofia_glue_set_image_sdp(tech_pvt, t38_options, msg->numeric_arg);
+				sofia_glue_set_udptl_image_sdp(tech_pvt, t38_options, msg->numeric_arg);
 
 				if (!switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
 					switch_channel_set_flag(channel, CF_REQ_MEDIA);
@@ -2563,6 +2551,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 		break;
 	case SWITCH_MESSAGE_INDICATE_DEFLECT:
 		{
+			char *extra_headers = sofia_glue_get_extra_headers(channel, SOFIA_SIP_HEADER_PREFIX);
 			char ref_to[1024] = "";
 			const char *var;
 
@@ -2572,7 +2561,9 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 			} else {
 				switch_set_string(ref_to, msg->string_arg);
 			}
-			nua_refer(tech_pvt->nh, SIPTAG_REFER_TO_STR(ref_to), SIPTAG_REFERRED_BY_STR(tech_pvt->contact_url), TAG_END());
+			nua_refer(tech_pvt->nh, SIPTAG_REFER_TO_STR(ref_to), SIPTAG_REFERRED_BY_STR(tech_pvt->contact_url),
+						TAG_IF(!zstr(extra_headers), SIPTAG_HEADER_STR(extra_headers)),
+						TAG_END());
 			switch_mutex_unlock(tech_pvt->sofia_mutex);
 			sofia_wait_for_reply(tech_pvt, 9999, 10);
 			switch_mutex_lock(tech_pvt->sofia_mutex);
@@ -2644,7 +2635,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 							if (!strcasecmp(sdp, "t38")) {
 								switch_t38_options_t *t38_options = switch_channel_get_private(tech_pvt->channel, "t38_options");
 								if (t38_options) {
-									sofia_glue_set_image_sdp(tech_pvt, t38_options, 0);
+									sofia_glue_set_udptl_image_sdp(tech_pvt, t38_options, 0);
 									if (switch_rtp_ready(tech_pvt->rtp_session)) {
 										sofia_clear_flag(tech_pvt, TFLAG_NOTIMER_DURING_BRIDGE);
 										switch_rtp_udptl_mode(tech_pvt->rtp_session);
@@ -5200,8 +5191,7 @@ static void general_event_handler(switch_event_t *event)
 					return;
 				}
 
-
-				if (to_uri && from_uri && ct && es && profile_name && (profile = sofia_glue_find_profile(profile_name))) {
+				if (to_uri && from_uri && ct && es) {
 					sofia_destination_t *dst = NULL;
 					nua_handle_t *nh;
 					char *route_uri = NULL;

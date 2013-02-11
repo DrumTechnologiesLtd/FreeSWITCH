@@ -756,7 +756,7 @@ SWITCH_DECLARE(void) switch_core_session_set_dmachine(switch_core_session_t *ses
 SWITCH_DECLARE(switch_ivr_dmachine_t *) switch_core_session_get_dmachine(switch_core_session_t *session, switch_digit_action_target_t target);
 SWITCH_DECLARE(switch_digit_action_target_t) switch_ivr_dmachine_get_target(switch_ivr_dmachine_t *dmachine);
 SWITCH_DECLARE(void) switch_ivr_dmachine_set_target(switch_ivr_dmachine_t *dmachine, switch_digit_action_target_t target);
-
+SWITCH_DECLARE(switch_status_t) switch_ivr_dmachine_set_terminators(switch_ivr_dmachine_t *dmachine, const char *terminators);
 SWITCH_DECLARE(switch_status_t) switch_core_session_set_codec_slin(switch_core_session_t *session, switch_slin_data_t *data);
 
 /*! 
@@ -2226,7 +2226,7 @@ SWITCH_DECLARE(void) switch_core_sqldb_resume(void);
   \}
 */
 
-typedef int (*switch_db_event_callback_func_t) (void *pArg, switch_event_t *event);
+typedef int (*switch_core_db_event_callback_func_t) (void *pArg, switch_event_t *event);
 
 #define CACHE_DB_LEN 256
 typedef enum {
@@ -2461,7 +2461,13 @@ SWITCH_DECLARE(switch_status_t) switch_sql_queue_manager_init_name(const char *n
 SWITCH_DECLARE(switch_status_t) switch_sql_queue_manager_start(switch_sql_queue_manager_t *qm);
 SWITCH_DECLARE(switch_status_t) switch_sql_queue_manager_stop(switch_sql_queue_manager_t *qm);
 SWITCH_DECLARE(switch_status_t) switch_cache_db_execute_sql_event_callback(switch_cache_db_handle_t *dbh,
-																		   const char *sql, switch_db_event_callback_func_t callback, void *pdata, char **err);
+																		   const char *sql, switch_core_db_event_callback_func_t callback, void *pdata, char **err);
+
+SWITCH_DECLARE(void) switch_sql_queue_manger_execute_sql_callback(switch_sql_queue_manager_t *qm, 
+																  const char *sql, switch_core_db_callback_func_t callback, void *pdata);
+
+SWITCH_DECLARE(void) switch_sql_queue_manger_execute_sql_event_callback(switch_sql_queue_manager_t *qm, 
+																		const char *sql, switch_core_db_event_callback_func_t callback, void *pdata);
 							
 SWITCH_DECLARE(pid_t) switch_fork(void);
 
