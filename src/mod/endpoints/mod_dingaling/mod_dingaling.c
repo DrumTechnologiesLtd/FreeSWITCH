@@ -1493,9 +1493,9 @@ static int activate_rtp(struct private_object *tech_pvt)
 	}
 
 	if (tech_pvt->transports[LDL_TPORT_VIDEO_RTP].ready) {
-		if (switch_test_flag(tech_pvt, TFLAG_OUTBOUND) || tech_pvt->transports[LDL_TPORT_VIDEO_RTCP].accepted) {
+//		if (switch_test_flag(tech_pvt, TFLAG_OUTBOUND) || tech_pvt->transports[LDL_TPORT_VIDEO_RTCP].accepted) {
 			r += activate_video_rtp(tech_pvt);
-		}
+//		}
 	}
 
 	return r;
